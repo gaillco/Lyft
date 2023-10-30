@@ -3,9 +3,9 @@ from discord.ext import commands
 
 intents = discord.Intents.default()
 intents.typing = True
-intents.presences = False
+intents.message_content = True
 
-bot = commands.Bot(command_prefix='!', intents=intents)  # Provide the 'intents' parameter
+bot = commands.Bot(command_prefix='!', intents=intents)
 
 send_message_enabled = True
 
@@ -14,16 +14,18 @@ async def on_ready():
     print(f'Logged in as {bot.user.name}')
 
 @bot.command()
-async def send_message(ctx, channel_id, *, message):
+async def send_message(ctx, channel_id, repeat_count: int, *, message):
     global send_message_enabled
     if send_message_enabled:
         channel = bot.get_channel(int(channel_id))
         if channel:
-            await channel.send(message)
+            for _ in range(repeat_count):
+                await channel.send(message)
         else:
             await ctx.send("Invalid channel ID")
     else:
         await ctx.send("The send_message command is currently disabled.")
+
 
 @bot.command()
 async def stop_send(ctx):
