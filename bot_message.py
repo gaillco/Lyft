@@ -4,7 +4,9 @@ from discord.ext import commands
 intents = discord.Intents.default()
 intents.typing = True
 intents.message_content = True
+intents.members = True
 
+bot = discord.Client(intents=intents)
 bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command('help')
 
@@ -12,32 +14,62 @@ bot_enabled = True
 
 send_message_enabled = True
 
+guild_id = 123456789012345678
+
+@client.event
+async def on_message(message):
+    if message.content.startswith('!is_owner'):
+        member = message.author
+        guild = client.get_guild(guild_id)
+
+        if guild and guild.owner == member:
+            await message.channel.send(f'{member.display_name} is the owner of this server!')
+        else:
+            await message.channel.send(f'{member.display_name} is not the owner of this server.')
+
+
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
     print(f'With the id {bot.user.id}')
+    
+    owner = await bot.application_info()
+    owner_user = owner.owner
+
+    for guild in bot.guilds:
+        await owner_user.send(f"Bot is now active on the server {guild.name} (ID: {guild.id}).")
+
+@bot.event
+async def on_disconnect():
+    owner = await bot.application_info()
+    owner_user = owner.owner
+
+    for guild in bot.guilds:
+        await owner_user.send(f"Bot is now offline on the server {guild.name} (ID: {guild.id}).")
+
+
 
 # List of available orders for user
 @bot.command()
 async def help(ctx):
-    allowed_roles = ["👤 || Epitechien(ne)", "GOAT 🐐", "@root"]
+    allowed_roles = ["🫂 || Fan Dream Team", "🛡️ || AER", "GOAT 🐐", "@root"]
     
     has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
     
     if has_allowed_role:
         embed = discord.Embed(title='__List of available orders :__\n', color=discord.Color.blue(), description="""
-                        **!help** : Displays this list of commands\n
+                        **!help** : Displays the user list of commands\n
                         **!send_pmessage** : Sends messages to a user on the discord server, command to be followed : ```!send_pmessage <user_id> <repeat_count> <message>```\n""",
                         )
         roles = [role.name for role in ctx.author.roles]
         roles_text = ', '.join(roles)
         
-        footer_text = "Don't forget to remove the ''< >'' in the commands"
+        footer_text = "Don't forget to remove the ''< >'' in the commands\n"
         
         if ctx.author.avatar is not None:
-            embed.set_footer(text=f"{ctx.author.name} - {footer_text} - [{roles_text}]", icon_url=ctx.author.avatar.url)
+            embed.set_footer(text=f"{ctx.author.name} - {footer_text} - [ {roles_text} ] - ", icon_url=ctx.author.avatar.url)
         else:
-            embed.set_footer(text=f"{ctx.author.name} - {footer_text} - [{roles_text}]")
+            embed.set_footer(text=f"{ctx.author.name} - {footer_text} - [ {roles_text} ] - ")
     else:
         await ctx.send("Sorry, you do not have permission to use this command.")
 
@@ -52,7 +84,8 @@ async def help_all(ctx):
     
     if has_allowed_role:
         embed = discord.Embed(title='__List of available orders :__\n', color=discord.Color.blue(), description="""
-                        **!help** : Displays this list of commands\n
+                        **!help** : Displays the user list of commands\n
+                        **!help_all** : Displays the staff list of commands\n
                         **!toggle**: Activate or desactivate the bot\n
                         **!all** : Delete all messages in the chanel discord\n
                         **!stop_send** : Disable message sending to chanel discord\n
@@ -64,12 +97,12 @@ async def help_all(ctx):
         roles = [role.name for role in ctx.author.roles]
         roles_text = ', '.join(roles)
 
-        footer_text = "Don't forget to remove the ''< >'' in the commands"
+        footer_text = "Don't forget to remove the ''< >'' in the commands\n"
 
         if ctx.author.avatar is not None:
-            embed.set_footer(text=f"{ctx.author.name} - {footer_text} - [{roles_text}]", icon_url=ctx.author.avatar.url)
+            embed.set_footer(text=f"{ctx.author.name} - {footer_text} - [ {roles_text} ] - ", icon_url=ctx.author.avatar.url)
         else:
-            embed.set_footer(text=f"{ctx.author.name} - {footer_text} - [{roles_text}]")
+            embed.set_footer(text=f"{ctx.author.name} - {footer_text} - [ {roles_text} ] - ")
 
     else:
         await ctx.send("Sorry, you do not have permission to use this command.")
@@ -123,7 +156,7 @@ async def send_message(ctx, channel_id, repeat_count: int, *, message):
 # Message for user
 @bot.command()
 async def send_pmessage(ctx, user_id, repeat_count: int, *, message):
-    allowed_roles = ["@root", "GOAT 🐐", "👤 || Epitechien(ne)"]
+    allowed_roles = ["@root", "GOAT 🐐", "🫂 || Fan Dream Team", "🛡️ || AER"]
     
     has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
     
@@ -203,10 +236,17 @@ async def start_send(ctx):
 # Handle command errors
 @send_message.error
 async def send_message_error(ctx, error):
-    if isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send("Invalid command format. Use: !send_message <channel_id> <repeat_count> <message>")
-    elif isinstance(error, commands.BadArgument):
-        await ctx.send("Invalid argument. Make sure to use valid channel_id and repeat_count values.")
+    allowed_roles = ["@root", "GOAT 🐐"]
+    
+    has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
+    
+    if has_allowed_role:
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.send("Invalid command format. Use: !send_message <channel_id> <repeat_count> <message>")
+        elif isinstance(error, commands.BadArgument):
+            await ctx.send("Invalid argument. Make sure to use valid channel_id and repeat_count values.")
+        else:
+            await ctx.send("Sorry, you do not have permission to use this command.")
 
 # Run the bot
 bot.run('MTE2ODQ4MTA4MDY4OTU2OTgxMg.GBvpYY._dTFXTlyqf6r6_z8L8eYTwu7tpmjlrCyEtuOFg') 
