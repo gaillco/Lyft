@@ -90,7 +90,8 @@ async def help_ticket_fonction(ctx):
                             **!setup_ticket** : Create the setup for ticket\n
                             **🚫** : Only for admin, delete the ticket\n
                             **❌** : Close the ticket\n
-                            **🔒** : Lock the ticket\n\n
+                            **🔒** : Lock the ticket\n
+                            **🔓** : Unlock the ticket\n
                             """,)
         roles = [role.name for role in ctx.author.roles]
         roles_text = ', '.join(roles)
