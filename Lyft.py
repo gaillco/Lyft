@@ -61,7 +61,7 @@ async def on_message(message):
         return
 
 # Block server invite links
-    if any(word in message.content for word in ["discord.gg/", "discord.com/invite/", "discordapp.com/invite/", "discord.me/", "discord.io/", "discord.tk/", "discordlist.net/", "discord.ly/", "discord.link/", "disboard.org/", "discord.gg"]):
+    if any(word in message.content for word in ["discord.gg/","//discord", "discord.com/invite/", "discordapp.com/invite/", "discord.me/", "discord.io/", "discord.tk/", "discordlist.net/", "discord.ly/", "discord.link/", "disboard.org/", "discord.gg"]):
             await message.delete()
             await message.channel.send(f"Sorry {message.author.display_name}, sending server invite links is not allowed.")
             await bot.process_commands(message)
@@ -84,15 +84,14 @@ async def on_message(message):
                 if destination_channel:
                     await destination_channel.send(f"{message.author.display_name} : {message.content} in {message.channel.mention}")
 
-
 # Log edited messages
 @bot.event
 async def on_message_edit(before, after):
-    if before.guild.id == SOURCE_SERVER_ID:
+    if before.guild is not None and before.guild.id == SOURCE_SERVER_ID:
         log_channel = bot.get_channel(DESTINATION_CHANNEL_ID_edited)
         if log_channel:
             if before.author == bot.user:
-                await log_channel.send(f"Message edited by the bot (ID: {before.author.id})")
+                await log_channel.send(f"Message edited by the bot {bot.user.name} (ID: {before.author.id})")
             else:
                 author_name = before.author.display_name if before.author else "Unknown User"
                 await log_channel.send(f"Message edited by {author_name}\nID = {before.author.id}\nContent of the message before : '**{before.content}**'\nContent of the message after : '**{after.content}**'\nIn {before.channel.mention}")
@@ -100,18 +99,19 @@ async def on_message_edit(before, after):
 # Log deleted messages 
 @bot.event
 async def on_message_delete(message):
-    if message.guild.id == SOURCE_SERVER_ID:
+    if message.guild is not None and message.guild.id == SOURCE_SERVER_ID:
         log_channel = bot.get_channel(DESTINATION_CHANNEL_ID_delete)
         if log_channel:
-            if message.author == bot.user:
-                await log_channel.send(f"Message deleted by the bot (ID: {message.author.id})")
+            author_name = message.author.display_name if message.author else "Unknown User"
+            if message.author.id == bot.user.id:
+                await log_channel.send(f"Message deleted by the bot {bot.user.name} (ID: {message.author.id})\nContent of the message: '**{message.content}**'")
             else:
-                author_name = message.author.display_name if message.author else "Unknown User"
-                await log_channel.send(f"Message deleted by {author_name}\nID = {message.author.id}\nContent of the message: '**{message.content}**'\nIn {message.channel.mention}")
+                await log_channel.send(f"----------------------------\nMessage deleted by {author_name}\nID = {message.author.id}\nContent of the message: '**{message.content}**'\nIn {message.channel.mention}\n----------------------------")
 
 # Bot activation
-@bot.command()
-async def toggle(ctx):
+@bot.tree.command(name="toggle", description="Activate or desactivate the bot")
+async def toggle(interaction):
+    ctx = await bot.get_context(interaction)
     allowed_roles = ["@root", "👑  || Owner", "GOAT 🐐"]
     
     has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
@@ -124,10 +124,43 @@ async def toggle(ctx):
     else:
         await ctx.send("Sorry, you do not have permission to use this command.")
 
+# Dropdown for grade selection
+class GradeSelect(ui.Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Grade 1", description="Select Grade 1", value="1"),
+            discord.SelectOption(label="Grade 2", description="Select Grade 2", value="2"),
+            discord.SelectOption(label="Grade 3", description="Select Grade 3", value="3"),
+            # Add more grades as options here
+        ]
+        super().__init__(placeholder="Choose your grade...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f'You selected {self.values[0]}', ephemeral=True)
+
+# Command to initiate the grade selection process
+class GradeSelectView(ui.View):
+    def __init__(self):
+        super().__init__()
+        self.add_item(GradeSelect())
+
+    @ui.button(label="Cancel", style=discord.ButtonStyle.red)
+    async def cancel(self, button: discord.Button, interaction: discord.Interaction):
+        await interaction.response.edit_message(view=None)
+
+@bot.tree.command(name="select_grade", description="Select your grade")
+async def select_grade(interaction: discord.Interaction):
+    await interaction.response.send_message("Please select your grade:", view=GradeSelectView(), ephemeral=True)
+
+async def has_any_role_check_nv1(interaction: discord.Interaction) -> bool:
+    role_names = {"@root", "👑  || Owner", "GOAT 🐐", "🫂 || Fan Dream Team", "🛡️ || AER"}
+    user_roles = {role.name for role in interaction.user.roles}
+    return any(role in user_roles for role in role_names)
 
 # Check who is the owner
-@bot.command()
-async def is_owner(ctx):
+@bot.tree.command(name="is_owner", description="To display who is the owner")
+async def is_owner(interaction):
+    ctx = await bot.get_context(interaction)
     allowed_roles = ["🫂 || Fan Dream Team", "🛡️ || AER", "GOAT 🐐","👑  || Owner", "<@root>"]
     
     has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
@@ -137,95 +170,95 @@ async def is_owner(ctx):
         author = ctx.author
 
         if guild and guild.owner == author:
-            await ctx.send(f'{author.display_name} is the owner of this server!')
+            await ctx.send(f'{author.display_name} is the owner of this server!', ephemeral=True)
         else:
-            await ctx.send(f'{author.display_name} is not the owner of this server. The owner is {guild.owner.display_name} (ID : {guild.owner.id}).')
+            await ctx.send(f'{author.display_name} is not the owner of this server. The owner is {guild.owner.display_name} (ID : {guild.owner.id}).', ephemeral=True)
     else:
-        await ctx.send("Sorry, you do not have permission to use this command.")
+        await ctx.send("Sorry, you do not have permission to use this command.", ephemeral=True)
 
 
 # List of available orders for user
-@bot.command()
-async def help(ctx):
+@bot.tree.command(name="help", description="Displays the user list of commands")
+async def help(interaction):
+    ctx = await bot.get_context(interaction)
+
     allowed_roles = ["🫂 || Fan Dream Team", "🛡️ || AER", "GOAT 🐐", "👑  || Owner", "@root"]
     
     has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
     
     if has_allowed_role:
         embed = discord.Embed(title='__List of available orders :__\n', color=discord.Color.blue(), description="""
-                        **!help** : Displays the user list of commands\n
-                        **!help_all** : Displays the staff list of commands\n
-                        **!help_ticket** : Displays the action for the ticket\n
-                        **!is_owner** : To display who is the owner\n
-                        **!send_pmessage** : Sends messages to a user on the discord server, command to be followed : ```!send_pmessage <user_id> <repeat_count> <message>```\n""",
+                        **/help** : Displays the user list of commands\n
+                        **/help_all** : Displays the staff list of commands\n
+                        **/help_ticket** : Displays the action for the ticket\n
+                        **/is_owner** : To display who is the owner\n
+                        **/send_pmessage** : Sends messages to a user on the discord server, command to be followed : ```!send_pmessage <user_id> <repeat_count> <message>```\n""", ephemeral=True
                         )
         roles = [role.name for role in ctx.author.roles]
         roles_text = ', '.join(roles)
-        
-        footer_text = "                   Don't forget to remove the ''< >'' in the commands\n\n"
-        
+                
         if ctx.author.avatar is not None:
-            embed.set_footer(text=f"{ctx.author.name}   {footer_text} - [ {roles_text} ] - ", icon_url=ctx.author.avatar.url)
+            embed.set_footer(text=f"{ctx.author.name} - [ {roles_text} ] - ", icon_url=ctx.author.avatar.url)
         else:
-            embed.set_footer(text=f"{ctx.author.name}   {footer_text} - [ {roles_text} ] - ")
+            embed.set_footer(text=f"{ctx.author.name} - [ {roles_text} ] - ")
     else:
-        await ctx.send("Sorry, you do not have permission to use this command.")
+        await ctx.send("Sorry, you do not have permission to use this command.", ephemeral=True)
 
     await ctx.send(embed=embed)
 
-
 # List of available orders for staff
-@bot.command()
-async def help_all(ctx):
+@bot.tree.command(name="help_all", description="Displays the staff list of commands")
+async def help_all(interaction):
+    ctx = await bot.get_context(interaction)
+
     allowed_roles = ["@root", "👑  || Owner", "GOAT 🐐"]
     
     has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
     
     if has_allowed_role:
         embed = discord.Embed(title='__List of available orders :__\n', color=discord.Color.blue(), description="""
-                        **!help** : Displays the user list of commands\n
-                        **!help_all** : Displays the staff list of commands\n
-                        **!help_ticket** : Displays the action for the ticket\n
-                        **!toggle**: Activate or desactivate the bot\n
-                        **!is_owner** : To display who is the owner\n
-                        **!all** : Delete all messages in the chanel discord\n
-                        **!stop_send** : Disable message sending to chanel discord\n
-                        **!start_send** : Enable message sending to chanel discord\n
-                        **!delc** : Delete the chanel discord\n
-                        **!send_message** : Send messages in a discord chanel, command to be followed : ```!send_message <channel_id> <repeat_count> <message>```\n
-                        **!send_pmessage** : Sends messages to a user on the discord server, command to be followed : ```!send_pmessage <user_id> <repeat_count> <message>```\n
-                        **!clear** : Delete messages in a chanel discord, command to be followed : ```!clear <amount>```\n
-                        """,)
+                        **/help** : Displays the user list of commands\n
+                        **/help_all** : Displays the staff list of commands\n
+                        **/help_ticket** : Displays the action for the ticket\n
+                        **/toggle**: Activate or desactivate the bot\n
+                        **/is_owner** : To display who is the owner\n
+                        **/all** : Delete all messages in the chanel discord\n
+                        **/stop_send** : Disable message sending to chanel discord\n
+                        **/start_send** : Enable message sending to chanel discord\n
+                        **/delc** : Delete the chanel discord\n
+                        **/send_message** : Send messages in a discord chanel, command to be followed : ```!send_message <channel_id> <repeat_count> <message>```\n
+                        **/send_pmessage** : Sends messages to a user on the discord server, command to be followed : ```!send_pmessage <user_id> <repeat_count> <message>```\n
+                        **/clear** : Delete messages in a chanel discord, command to be followed : ```!clear <amount>```\n
+                        """, ephemeral=True)
         roles = [role.name for role in ctx.author.roles]
         roles_text = ', '.join(roles)
 
-        footer_text = "                   Don't forget to remove the ''< >'' in the commands\n\n"
-
         if ctx.author.avatar is not None:
-            embed.set_footer(text=f"{ctx.author.name}  {footer_text} - [ {roles_text} ] - ", icon_url=ctx.author.avatar.url)
+            embed.set_footer(text=f"{ctx.author.name} - [ {roles_text} ] - ", icon_url=ctx.author.avatar.url)
         else:
-            embed.set_footer(text=f"{ctx.author.name}  {footer_text} - [ {roles_text} ] - ")
+            embed.set_footer(text=f"{ctx.author.name} - [ {roles_text} ] - ")
 
     else:
-        await ctx.send("Sorry, you do not have permission to use this command.")
+        await ctx.send("Sorry, you do not have permission to use this command.", ephemeral=True)
 
     await ctx.send(embed=embed)
 
 # List of available orders for ticket
-@bot.command()
-async def help_ticket(ctx):
+@bot.tree.command(name="help_ticket", description="Displays the ticket list of commands")
+async def help_ticket(interaction):
+    ctx = await bot.get_context(interaction)
     allowed_roles = ["@root", "👑  || Owner", "GOAT 🐐"]
 
     has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
 
     if has_allowed_role:
         embed = discord.Embed(title='__List of commande for ticket__\n', color=discord.Color.blue(), description="""
-                            **!setup_ticket** : Create the setup for ticket\n
+                            **/setup_ticket** : Create the setup for ticket\n
                             **🚫** : Only for admin, delete the ticket\n
                             **❌** : Close the ticket\n
                             **🔒** : Lock the ticket\n
                             **🔓** : Unlock the ticket\n
-                            """,)
+                            """, ephemeral=True)
         roles = [role.name for role in ctx.author.roles]
         roles_text = ', '.join(roles)
 
@@ -235,53 +268,47 @@ async def help_ticket(ctx):
             embed.set_footer(text=f"{ctx.author.name} - [ {roles_text} ] - ")
         await ctx.send(embed=embed)
     else:
-        await ctx.send("Sorry, you do not have permission to use this command.")
+        await ctx.send("Sorry, you do not have permission to use this command.", ephemeral=True)
 
 # Message in chanel discord
-@bot.command()
-async def send_message(ctx, channel_id, repeat_count: int, message):
-    allowed_roles = ["@root", "👑  || Owner", "GOAT 🐐"]
-    
-    has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
-    
-    if has_allowed_role:
-        global send_message_enabled
-        if send_message_enabled:
-            channel = bot.get_channel(int(channel_id))
-            if channel:
-                for _ in range(repeat_count):
-                    await channel.send(message)
-            else:
-                await ctx.send("Invalid channel ID")
-        else:
-            await ctx.send("The send_message command is currently disabled.")
-    else:
-        await ctx.send("Sorry, you do not have permission to use this command.")
+@bot.tree.command(name="send_message", description="Send a message to a channel.")
+@app_commands.checks.has_any_role("@root", "👑  || Owner", "GOAT 🐐", "🫂 || Fan Dream Team", "🛡️ || AER")
+@app_commands.check(has_any_role_check_nv1) 
+async def send_message(interaction: discord.Interaction, channel: discord.TextChannel, repeat_count: int, message: str):
+    try:
+        await interaction.response.defer(ephemeral=True)
 
-    
-# Message for user
-@bot.command()
-async def send_pmessage(ctx, user_id, repeat_count: int, message):
-    allowed_roles = ["@root", "👑  || Owner", "GOAT 🐐", "🫂 || Fan Dream Team", "🛡️ || AER"]
-    
-    has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
-    
-    if has_allowed_role:
-        global send_message_enabled
-        if send_message_enabled:
-            user = await bot.fetch_user(user_id)
-        if user:
+        if channel:
             for _ in range(repeat_count):
-                await user.send(message)
-            await ctx.send(f"{repeat_count} messages sent to {user.mention}.")
+                await channel.send(message)
+            await interaction.followup.send(f"{repeat_count} messages sent to {channel.mention}.", ephemeral=True)
         else:
-            await ctx.send("Invalid user ID.")
-    else:
-        await ctx.send("Sorry, you do not have permission to use this command.")
+            await interaction.followup.send("Channel not found or you do not have permission to send messages to this channel.", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
+
+
+# Message to user
+@bot.tree.command(name="send_pmessage", description="Send a private message to a user.")
+@app_commands.checks.has_any_role("@root", "👑  || Owner", "GOAT 🐐", "🫂 || Fan Dream Team", "🛡️ || AER")
+@app_commands.check(has_any_role_check_nv1) 
+async def send_pmessage(interaction: discord.Interaction, user: discord.User, repeat_count: int, message: str):
+    try:
+        await interaction.response.defer(ephemeral=True)
+
+        await user.create_dm()
+        for _ in range(repeat_count):
+            await user.send(message)
+
+        await interaction.followup.send(f"{repeat_count} messages sent to {user.mention}.", ephemeral=True)
+    except PermissionError:
+        await interaction.followup.send("Sorry, you do not have permission to use this command.", ephemeral=True)
+
 
 # Delete channel
-@bot.command()
-async def delc(ctx):
+@bot.tree.command(name="delc", description="Delete the chanel discord")
+async def delc(interaction):
+    ctx = await bot.get_context(interaction)
     allowed_roles = ["@root", "👑  || Owner", "GOAT 🐐"]
     
     has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
@@ -290,46 +317,89 @@ async def delc(ctx):
         try:
             await ctx.channel.delete()
         except discord.Forbidden:
-            await ctx.send("Je n'ai pas la permission de supprimer ce canal.")
+            await ctx.send("I don't have the permission to delete this channel.", ephemeral=True)
         except discord.HTTPException:
-            await ctx.send("Une erreur s'est produite lors de la suppression du canal.")
+            await ctx.send("An error occurred while deleting the channel.", ephemeral=True)
     else:
-        await ctx.send("Sorry, you do not have permission to use this command.")
+        await ctx.send("Sorry, you do not have permission to use this command.", ephemeral=True)
 
 # Clear messages
-@bot.command()
-async def clear(ctx, amount: int):
-    allowed_roles = ["@root", "👑  || Owner", "GOAT 🐐"]
-    
-    has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
-    
-    if has_allowed_role:
-        if amount <= 0:
-            await ctx.send("Please specify a valid number of messages to delete.")
-            return
+@bot.tree.command(name="clear", description="Delete messages in a channel on Discord")
+@app_commands.checks.has_any_role("@root", "👑  || Owner", "GOAT 🐐", "🫂 || Fan Dream Team", "🛡️ || AER")
+@app_commands.check(has_any_role_check_nv1)
+async def clear(interaction: discord.Interaction, amount: int):
+    if amount <= 0:
+        await interaction.response.send_message("Please specify a valid number of messages to delete.", ephemeral=True)
+        return
 
-        await ctx.channel.purge(limit=amount + 1)
+    await interaction.response.defer(ephemeral=True)
 
-        await ctx.send(f"{amount} messages have been deleted.")
+    channel = interaction.channel
+    if isinstance(channel, discord.TextChannel):
+        deleted_messages = await channel.purge(limit=amount)
+        await interaction.followup.send(f"{len(deleted_messages)} messages have been deleted.", ephemeral=True)
     else:
-        await ctx.send("Sorry, you do not have permission to use this command.")
+        await interaction.followup.send("This command can only be used in text channels.", ephemeral=True)
+
 
 # Clear all messages
-@bot.command()
-async def all(ctx):
+@bot.tree.command(name="all", description="Delete all messages in the chanel discord")
+async def all(interaction):
+    ctx = await bot.get_context(interaction)
     allowed_roles = ["@root", "👑  || Owner", "GOAT 🐐"]
     
     has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
     
     if has_allowed_role:
         await ctx.channel.purge()
-        await ctx.send("All messages have been deleted.")
+        await ctx.send("All messages have been deleted.", ephemeral=True)
     else:
-        await ctx.send("Sorry, you do not have permission to use this command.")
+        await ctx.send("Sorry, you do not have permission to use this command.", ephemeral=True)
+
+# Kick members
+@bot.tree.command(name="kick", description="Kick a member")
+@app_commands.checks.has_any_role("@root", "👑  || Owner", "GOAT 🐐", "🫂 || Fan Dream Team", "🛡️ || AER")
+@app_commands.check(has_any_role_check_nv1) 
+async def kick(interaction: discord.Interaction, member: discord.Member, *, reason: str = None):
+    try:
+        dm_message = f"You have been kicked from {interaction.guild.name}."
+        if reason:
+            dm_message += f" Reason: {reason}"
+        try:
+            await member.send(dm_message)
+        except discord.errors.HTTPException:
+            pass
+
+        await member.kick(reason=reason)
+
+        log_channel_id = LOG__KICK_CHANNEL_ID
+        other_guild_id = SOURCE_SERVER_ID
+
+        log_guild = bot.get_guild(other_guild_id)
+        log_channel = log_guild.get_channel(log_channel_id) if log_guild else None
+
+        if log_channel:
+            try:
+                await log_channel.send(f"{member.display_name} has been kicked by {interaction.author.display_name}. Reason: {reason if reason else 'No reason provided'}")
+            except Exception as e:
+                print(f"Failed to send message to log channel: {e}")
+        else:
+            print("Log channel not found")
+
+
+        await interaction.response.send_message(f"{member.display_name} has been kicked.", ephemeral=True)
+    except discord.Forbidden:
+        await interaction.response.send_message("I do not have permission to kick this user.", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"An error occurred: {e}", ephemeral=True)
+
+
+
 
 # Disable messages
-@bot.command()
-async def stop_send(ctx):
+@bot.tree.command(name="stop_send", description="Disable message sending to chanel discord")
+async def stop_send(interaction):
+    ctx = await bot.get_context(interaction)
     allowed_roles = ["@root", "👑  || Owner", "GOAT 🐐"]
     
     has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
@@ -337,14 +407,15 @@ async def stop_send(ctx):
     if has_allowed_role:
         global send_message_enabled
         send_message_enabled = False
-        await ctx.send("The send_message command has been disabled.")
+        await ctx.send("The send_message command has been disabled.", ephemeral=True)
     else:
-        await ctx.send("Sorry, you do not have permission to use this command.")
+        await ctx.send("Sorry, you do not have permission to use this command.", ephemeral=True)
 
 
 # Enabled messages
-@bot.command()
-async def start_send(ctx):
+@bot.tree.command(name="start_send", description="Enable message sending to chanel discord")
+async def start_send(interaction):
+    ctx = await bot.get_context(interaction)
     allowed_roles = ["@root", "👑  || Owner", "GOAT 🐐"]
     
     has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
@@ -352,13 +423,14 @@ async def start_send(ctx):
     if has_allowed_role:
         global send_message_enabled
         send_message_enabled = True
-        await ctx.send("The send_message command has been enabled.")
+        await ctx.send("The send_message command has been enabled.", ephemeral=True)
     else:
-        await ctx.send("Sorry, you do not have permission to use this command.")
+        await ctx.send("Sorry, you do not have permission to use this command.", ephemeral=True)
 
 # Create ticket
-@bot.command()
-async def setup_ticket(ctx):
+@bot.tree.command(name="setup_ticket", description="setup ticket for ticket")
+async def setup_ticket(interaction):
+    ctx = await bot.get_context(interaction)
     guild = ctx.guild
 
     if ctx.channel.id == SUPPORT_CHANNEL_ID:
@@ -486,20 +558,6 @@ def create_ticket_embed(ticket_channel):
         React with ❌ to close this ticket
         React with 🔒 to lock this ticket
     """)
-
-@send_message.error
-async def send_message_error(ctx, error):
-    allowed_roles = ["@root", "👑  || Owner", "GOAT 🐐"]
-    
-    has_allowed_role = any(role.name in allowed_roles for role in ctx.author.roles)
-    
-    if has_allowed_role:
-        if isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send("Invalid command format. Use: !send_message <channel_id> <repeat_count> <message>")
-        elif isinstance(error, commands.BadArgument):
-            await ctx.send("Invalid argument. Make sure to use valid channel_id and repeat_count values.")
-        else:
-            await ctx.send("Sorry, you do not have permission to use this command.")
 
 @bot.event
 async def on_raw_reaction_add(payload):
